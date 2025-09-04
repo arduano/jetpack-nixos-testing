@@ -5,7 +5,7 @@
     jetpack.inputs.nixpkgs.follows = "nixpkgs";
   };
   outputs = inputs@{ self, nixpkgs, jetpack, ... } : { # Add jetpack
-    nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
+    nixosConfigurations.orin = nixpkgs.lib.nixosSystem {
       modules = [ ./configuration.nix jetpack.nixosModules.default ]; # Add jetpack.nixosModules.default
     };
   };
