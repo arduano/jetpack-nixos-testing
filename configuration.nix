@@ -1,8 +1,16 @@
 {
+  # Enable the JetPack integration.  See jetpack‑nixos README for details:contentReference[oaicite:1]{index=1}.
   hardware.nvidia-jetpack.enable = true;
-  hardware.nvidia-jetpack.som = "orin-nx"; # Other options include orin-agx, xavier-nx, and xavier-nx-emmc
-  hardware.nvidia-jetpack.carrierBoard = "devkit";
+  hardware.nvidia-jetpack.som = "orin-nx";         # adjust for your SOM
+  hardware.nvidia-jetpack.carrierBoard = "devkit"; # adjust if using a different carrier
 
-  # Enable GPU support - needed even for CUDA and containers
+  # Enable the vendor graphics stack (required for CUDA and multimedia):contentReference[oaicite:2]{index=2}.
   hardware.graphics.enable = true;
+
+  users.users.nixos = {
+    isNormalUser = true;
+    extraGroups = [ "wheel" ];
+    initialPassword = "nixos";
+    createHome = true;
+  };
 }
