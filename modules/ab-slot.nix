@@ -62,8 +62,8 @@ in {
         # find newest nixos-generation-*.conf (numeric sort)
         latest="$(${cu}/printf '%s\n' "$E"/nixos-generation-*.conf \
                 | ${cu}/sort -V | ${cu}/tail -n1 || true)"
-        if [ -n "${latest:-}" ] && [ -e "$latest" ]; then
-          trial="${latest%.conf}+2-0.conf"
+        if [ -n "''${latest:-}" ] && [ -e "$latest" ]; then
+          trial="''${latest%.conf}+2-0.conf"
           if [ ! -e "$trial" ]; then
             ${cu}/mv "$latest" "$trial"
           fi
