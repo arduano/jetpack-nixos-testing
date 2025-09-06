@@ -77,8 +77,5 @@ in {
     # Only bless boot as "successful" if no failed units
     systemd.services.systemd-boot-check-no-failures.enable = true;
     systemd.services.systemd-boot-check-no-failures.wantedBy = [ "boot-complete.target" ];
-
-    # If your initrd isn’t already systemd-based, enable it for rich logs:
-    boot.initrd.systemd.enable = true;
   };
 }
