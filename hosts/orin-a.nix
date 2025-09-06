@@ -1,5 +1,5 @@
-{ ... }: {
-    environment.systemPackages = [
+{ pkgs, lib, ... }: {
+  environment.systemPackages = [
     (pkgs.writeShellScriptBin "status" ''
       echo "Known good generation"
     '')
