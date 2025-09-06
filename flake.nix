@@ -47,5 +47,5 @@
       otherRootLabel = "NIXROOT_A";
       otherBootLabel = "NIXBOOT_A";
     };
-  }
+  };
 }
