@@ -11,7 +11,7 @@ in {
         --flake ${cfg.flakeRef}#${cfg.hostname} \
         --refresh
 
-      echo "[4/2] Installing OTHER slot (${cfg.otherHostname}) into /mnt/other…"
+      echo "[1/2] Installing OTHER slot (${cfg.otherHostname}) into /mnt/other…"
       sudo nixos-install \
         --root /mnt/other \
         --flake ${cfg.flakeRef}#${cfg.otherHostname} \

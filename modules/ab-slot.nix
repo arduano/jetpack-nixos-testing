@@ -37,6 +37,12 @@ in {
       neededForBoot = false;
     };
 
+    fileSystems."/mnt/other/boot" = {
+      device = "/dev/disk/by-label/${cfg.otherBootLabel}";
+      fsType = "vfat";
+      neededForBoot = false;
+    };
+
     # Make root explicit (works for both classic + UKI)
     boot.kernelParams = [
       "root=LABEL=${cfg.rootLabel}"
