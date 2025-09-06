@@ -15,4 +15,6 @@
     initialPassword = "nixos";
     createHome = true;
   };
+
+  services.openssh.enable = true;
 }

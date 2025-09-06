@@ -7,50 +7,45 @@
 
   outputs = inputs@{ self, nixpkgs, jetpack, ... }:
   let
-    # Common JetPack/NixOS module
-    baseModules = [
-      jetpack.nixosModules.default
-      ./configuration.nix
-    ];
-    mkSystem = { hostname, rootLabel, bootLabel }:
+    lib = nixpkgs.lib;
+
+    mkSystem = { hostname, rootLabel, bootLabel, otherHostname, otherRootLabel, otherBootLabel }:
       nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
-        modules = baseModules ++ [
-          ({ pkgs, ... }: {
-            # root and boot specific to the slot
-            fileSystems."/" = {
-              device = "/dev/disk/by-label/${rootLabel}";
-              fsType = "btrfs";
-              options = [ "subvol=@" "ssd" "compress=zstd" "discard=async" ];
-            };
-            fileSystems."/boot" = {
-              device = "/dev/disk/by-label/${bootLabel}";
-              fsType  = "vfat";
-            };
-
-            boot.kernelParams = [
-              "root=LABEL=${rootLabel}"
-              "rootflags=subvol=@,compress=zstd,ssd,discard=async"
-            ];
-            boot.loader.efi.efiSysMountPoint = "/boot";
-
-            boot.loader.systemd-boot.enable = true;
-            boot.loader.efi.canTouchEfiVariables = true;
-            networking.hostName = hostname;
-          })
-        ];
+        modules =
+          [
+            jetpack.nixosModules.default
+            ./configuration.nix
+            ./modules/ab-slot.nix
+            ./modules/update-system.nix
+          ]
+          ++ lib.optional (builtins.pathExists (./hosts + "/${hostname}.nix")) (./hosts + "/${hostname}.nix")
+          ++ [
+            ({ ... }: {
+              ab.slot = {
+                inherit hostname rootLabel bootLabel otherHostname otherRootLabel otherBootLabel;
+                flakeRef = "github:arduano/jetpack-nixos-testing";
+              };
+            })
+          ];
       };
-  in
-  {
+  in {
     nixosConfigurations.orin-a = mkSystem {
       hostname = "orin-a";
       rootLabel = "NIXROOT_A";
       bootLabel = "NIXBOOT_A";
+      otherHostname = "orin-b";
+      otherRootLabel = "NIXROOT_B";
+      otherBootLabel = "NIXBOOT_B";
     };
+
     nixosConfigurations.orin-b = mkSystem {
       hostname = "orin-b";
       rootLabel = "NIXROOT_B";
       bootLabel = "NIXBOOT_B";
+      otherHostname = "orin-a";
+      otherRootLabel = "NIXROOT_A";
+      otherBootLabel = "NIXBOOT_A";
     };
-  };
+  }
 }

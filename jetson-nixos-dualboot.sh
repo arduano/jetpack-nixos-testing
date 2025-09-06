@@ -36,42 +36,44 @@ check_entry_files() {
 }
 
 cleanup_nvram_for_disk() {
-  # Remove any existing systemd-boot entries that reference this disk's ESPs.
-  # Safer heuristic: only delete entries whose path ends with systemd-bootaa64.efi AND that point to HD(1,...) or HD(2,...)
-  local disk="$1"
-  if ! command -v efibootmgr >/dev/null 2>&1; then
-    log "efibootmgr not available; skipping NVRAM cleanup/creation"
-    return 0
-  fi
-  local out; out="$(efibootmgr -v || true)"
-  # Find matching entries
-  awk -v RS='' '/systemd-bootaa64\.efi/ {print}' <<<"$out" \
-  | grep -E 'HD\((1|2),' || true \
-  | sed -n 's/^Boot\([0-9A-Fa-f]\{4\}\)\*.*/\1/p' \
-  | while read -r id; do
-      [ -n "$id" ] && sudo efibootmgr -b "$id" -B || true
-    done
+  # remove any systemd-boot entries for ESP1/ESP2
+  command -v efibootmgr >/dev/null || return 0
+  efibootmgr -v \
+    | awk '/systemd-bootaa64\.efi/ && /HD\((1|2),/ {print $1}' \
+    | sed 's/^Boot\([0-9A-Fa-f]\{4\}\)\*.*/\1/' \
+    | while read -r id; do [ -n "$id" ] && sudo efibootmgr -b "$id" -B || true; done
+}
+
+boot_id_by_label() {
+  local label="$1"
+  efibootmgr -v | grep -F "$label" \
+    | sed -n 's/^Boot\([0-9A-Fa-f]\{4\}\)\*.*/\1/p' | head -n1
+}
+
+boot_id_by_part() {
+  local part="$1" # 1 or 2
+  efibootmgr -v | awk '/\\EFI\\BOOT\\BOOTAA64\.EFI/ && /HD\('"$part"',/ {print $1}' \
+    | sed 's/^Boot\([0-9A-Fa-f]\{4\}\)\*.*/\1/' | head -n1
 }
 
 create_nvram_entries() {
   local disk="$1" labelA="$2" labelB="$3"
-  if ! command -v efibootmgr >/devnull 2>&1; then
-    log "efibootmgr not available; skipping NVRAM entry creation"
-    return 0
-  fi
+  command -v efibootmgr >/dev/null || { log "no efibootmgr"; return 0; }
 
-  sudo efibootmgr -c -d "$disk" -p 1 -L "$labelA" -l '\EFI\systemd\systemd-bootaa64.efi'
-  sudo efibootmgr -c -d "$disk" -p 2 -L "$labelB" -l '\EFI\systemd\systemd-bootaa64.efi'
+  # Use the fallback path (works with Jetson firmware)
+  sudo efibootmgr -c -d "$disk" -p 1 -L "$labelA" -l 'EFI\BOOT\BOOTAA64.EFI'
+  sudo efibootmgr -c -d "$disk" -p 2 -L "$labelB" -l 'EFI\BOOT\BOOTAA64.EFI'
 
-  # Get the new IDs by label
+  # Resolve IDs by label, then by partition if needed
   local ida idb
-  ida="$(efibootmgr -v | awk -v L="$labelA" '$0 ~ L {print $1}' | sed 's/Boot\([0-9A-Fa-f]\+\)\*/\1/' | head -n1)"
-  idb="$(efibootmgr -v | awk -v L="$labelB" '$0 ~ L {print $1}' | sed 's/Boot\([0-9A-Fa-f]\+\)\*/\1/' | head -n1)"
+  ida="$(boot_id_by_label "$labelA")"; [ -z "$ida" ] && ida="$(boot_id_by_part 1)"
+  idb="$(boot_id_by_label "$labelB")"; [ -z "$idb" ] && idb="$(boot_id_by_part 2)"
+
   if [ -n "$ida" ] && [ -n "$idb" ]; then
-    sudo efibootmgr -o "$ida","$idb"
+    sudo efibootmgr -o "$ida,$idb"
     log "Set BootOrder: $ida (A) then $idb (B)"
   else
-    log "WARN: Could not determine new Boot#### IDs; set BootOrder manually with efibootmgr -o …"
+    log "WARN: Could not determine Boot#### IDs; set manually with: sudo efibootmgr -o <A>,<B>"
   fi
 }
 
@@ -159,10 +161,10 @@ fi
 
 # Install both slots (explicitly install bootloader)
 log "Installing slot A ($HOSTNAME_A)…"
-sudo nixos-install --root /mntA --flake "$FLAKE_A" --no-root-passwd --install-bootloader
+sudo nixos-install --root /mntA --flake "$FLAKE_A" --no-root-passwd
 
 log "Installing slot B ($HOSTNAME_B)…"
-sudo nixos-install --root /mntB --flake "$FLAKE_B" --no-root-passwd --install-bootloader
+sudo nixos-install --root /mntB --flake "$FLAKE_B" --no-root-passwd
 
 # Ensure fallback loader paths exist on both ESPs
 log "Placing fallback BOOTAA64.EFI on both ESPs…"
