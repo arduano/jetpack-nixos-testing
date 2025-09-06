@@ -16,7 +16,7 @@
       nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
         modules = baseModules ++ [
-          { pkgs, ... }: {
+          ({ pkgs, ... }: {
             # root and boot specific to the slot
             fileSystems."/" = {
               device = "/dev/disk/by-label/${rootLabel}";
@@ -30,7 +30,7 @@
             boot.loader.systemd-boot.enable = true;
             boot.loader.efi.canTouchEfiVariables = true;
             networking.hostName = hostname;
-          }
+          })
         ];
       };
   in

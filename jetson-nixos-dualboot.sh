@@ -124,6 +124,9 @@ sudo umount /mnt
 sudo mount -o subvol=@ "$ROOT_A" /mnt
 sudo mkdir -p /mnt/boot
 sudo mount "$BOOT_A" /mnt/boot
+echo "Copying Nix store paths to the new installation…"
+sudo nix copy --from ssh://arduano@192.168.1.51 /nix/store/qjlndsfq60h2jrcbz68mwp591rr36f6j-nixos-system-orin-25.05.20250903.0e6684e --store /mnt --no-check-sigs
+echo "Copying Nix store paths to the new installation…"
 sudo nixos-install --root /mnt --flake "$FLAKE_A" --no-root-passwd
 sudo umount -R /mnt
 
@@ -137,6 +140,9 @@ sudo umount /mnt2
 sudo mount -o subvol=@ "$ROOT_B" /mnt2
 sudo mkdir -p /mnt2/boot
 sudo mount "$BOOT_B" /mnt2/boot
+echo "Copying Nix store paths to the new installation…"
+sudo nix copy --from ssh://arduano@192.168.1.51 /nix/store/qjlndsfq60h2jrcbz68mwp591rr36f6j-nixos-system-orin-25.05.20250903.0e6684e --store /mnt2 --no-check-sigs
+echo "Copying Nix store paths to the new installation…"
 sudo nixos-install --root /mnt2 --flake "$FLAKE_B" --no-root-passwd
 sudo umount -R /mnt2
 
