@@ -1,9 +1,7 @@
 { pkgs, ... }: {
   environment.systemPackages = [
     (pkgs.writeShellScriptBin "status" ''
-      echo "Known bad generation"
+      echo "Known good generation"
     '')
   ];
-
-  boot.kernelModules = [ "this_module_does_not_exist" ];
 }
