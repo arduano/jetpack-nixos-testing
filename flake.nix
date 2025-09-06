@@ -27,6 +27,13 @@
               device = "/dev/disk/by-label/${bootLabel}";
               fsType  = "vfat";
             };
+
+            boot.kernelParams = [
+              "root=LABEL=${rootLabel}"
+              "rootflags=subvol=@,compress=zstd,ssd,discard=async"
+            ];
+            boot.loader.efi.efiSysMountPoint = "/boot";
+
             boot.loader.systemd-boot.enable = true;
             boot.loader.efi.canTouchEfiVariables = true;
             networking.hostName = hostname;

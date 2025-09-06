@@ -24,6 +24,11 @@
 
 set -euo pipefail
 
+# Log function to print messages in aqua (cyan)
+log() {
+    echo -e "\033[36m$*\033[0m" >&2
+}
+
 # NVMe device to partition and install onto.
 DISK="/dev/nvme0n1"
 
@@ -44,17 +49,17 @@ BOOT_SIZE_MiB=512
 # Ensure we have the required commands available.
 for cmd in sgdisk mkfs.fat mkfs.btrfs partprobe lsblk mount umount nixos-install; do
     command -v "$cmd" >/dev/null 2>&1 || {
-        echo "Error: required command $cmd not found" >&2
+        log "Error: required command $cmd not found"
         exit 1
     }
 done
 
 # Confirm the user really wants to wipe the disk.
-echo "This will partition and erase $DISK. Continue? [y/N]" >&2
+log "This will partition and erase $DISK. Continue? [y/N]"
 read -r reply
 case "$reply" in
     [Yy]*) ;;
-    *) echo "Aborted." >&2; exit 1;;
+    *) log "Aborted."; exit 1;;
 esac
 
 # Unmount any existing mount points on the device to avoid busy errors.
@@ -62,13 +67,13 @@ for p in $(lsblk -ln -o NAME "$DISK" | tail -n +2); do
     part="/dev/$p"
     mountpoint=$(lsblk -n -o MOUNTPOINT "$part" || true)
     if [ -n "$mountpoint" ]; then
-        echo "Unmounting $part from $mountpoint"
+        log "Unmounting $part from $mountpoint"
         sudo umount -Rf "$mountpoint" || true
     fi
 done
 
 # Wipe existing partition table.
-echo "Wiping existing partition table on $DISK…"
+log "Wiping existing partition table on $DISK…"
 sudo sgdisk --zap-all "$DISK"
 sudo sgdisk --clear "$DISK"
 
@@ -96,12 +101,12 @@ sudo sgdisk -n4:0:0               -t4:8300 -c4:"ROOT_B" "$DISK"
 sudo partprobe "$DISK"
 
 # Format ESPs as FAT32.
-echo "Formatting boot partitions…"
+log "Formatting boot partitions…"
 sudo mkfs.fat -F32 -n "NIXBOOT_A" "${DISK}p1"
 sudo mkfs.fat -F32 -n "NIXBOOT_B" "${DISK}p2"
 
 # Format root partitions as btrfs (DUP mode for data and metadata).
-echo "Formatting root partitions…"
+log "Formatting root partitions…"
 for idx in 3 4; do
     label="NIXROOT_$( [ $idx -eq 3 ] && echo A || echo B )"
     sudo mkfs.btrfs -f -L "$label" -m dup -d dup "${DISK}p${idx}"
@@ -114,47 +119,64 @@ ROOT_B="${DISK}p4"
 BOOT_A="${DISK}p1"
 BOOT_B="${DISK}p2"
 
-# Install slot A
+# Prepare and mount BOTH slots first (easier for copying/artifacts)
 
-echo "Installing slot A (${HOSTNAME_A})…"
-sudo mkdir -p /mnt
-sudo mount "$ROOT_A" /mnt
-sudo btrfs subvolume create /mnt/@
-sudo umount /mnt
-sudo mount -o subvol=@ "$ROOT_A" /mnt
-sudo mkdir -p /mnt/boot
-sudo mount "$BOOT_A" /mnt/boot
-echo "Copying Nix store paths to the new installation…"
-sudo nix copy --from ssh://arduano@192.168.1.51 /nix/store/qjlndsfq60h2jrcbz68mwp591rr36f6j-nixos-system-orin-25.05.20250903.0e6684e --store /mnt --no-check-sigs
-echo "Copying Nix store paths to the new installation…"
-sudo nixos-install --root /mnt --flake "$FLAKE_A" --no-root-passwd
-sudo umount -R /mnt
+log "Preparing mounts for slots A and B…"
 
-# Install slot B
+# Slot A mounts
+sudo mkdir -p /mntA
+sudo mount "$ROOT_A" /mntA
+sudo btrfs subvolume create /mntA/@
+sudo umount /mntA
+sudo mount -o subvol=@ "$ROOT_A" /mntA
+sudo mkdir -p /mntA/boot
+sudo mount "$BOOT_A" /mntA/boot
 
-echo "Installing slot B (${HOSTNAME_B})…"
-sudo mkdir -p /mnt2
-sudo mount "$ROOT_B" /mnt2
-sudo btrfs subvolume create /mnt2/@
-sudo umount /mnt2
-sudo mount -o subvol=@ "$ROOT_B" /mnt2
-sudo mkdir -p /mnt2/boot
-sudo mount "$BOOT_B" /mnt2/boot
-echo "Copying Nix store paths to the new installation…"
-sudo nix copy --from ssh://arduano@192.168.1.51 /nix/store/qjlndsfq60h2jrcbz68mwp591rr36f6j-nixos-system-orin-25.05.20250903.0e6684e --store /mnt2 --no-check-sigs
-echo "Copying Nix store paths to the new installation…"
-sudo nixos-install --root /mnt2 --flake "$FLAKE_B" --no-root-passwd
-sudo umount -R /mnt2
+# Slot B mounts
+sudo mkdir -p /mntB
+sudo mount "$ROOT_B" /mntB
+sudo btrfs subvolume create /mntB/@
+sudo umount /mntB
+sudo mount -o subvol=@ "$ROOT_B" /mntB
+sudo mkdir -p /mntB/boot
+sudo mount "$BOOT_B" /mntB/boot
+
+# Optional: pre-seed/store warm-up
+log "Pre-seeding Nix store into slot A…"
+sudo nix copy --from ssh://arduano@192.168.1.51 \
+  /nix/store/qjlndsfq60h2jrcbz68mwp591rr36f6j-nixos-system-orin-25.05.20250903.0e6684e \
+  --store /mntA --no-check-sigs
+
+log "Pre-seeding Nix store into slot B (from A)…"
+sudo nix copy --from /mntA \
+  /nix/store/qjlndsfq60h2jrcbz68mwp591rr36f6j-nixos-system-orin-25.05.20250903.0e6684e \
+  --store /mntB --no-check-sigs
+
+# ---------------------------
+# Install slot A (orin-a)
+# ---------------------------
+log "Running nixos-install on slot A (${HOSTNAME_A})…"
+sudo nixos-install --root /mntA --flake "$FLAKE_A" --no-root-passwd
+
+# ---------------------------
+# Install slot B (orin-b)
+# ---------------------------
+log "Running nixos-install on slot B (${HOSTNAME_B})…"
+sudo nixos-install --root /mntB --flake "$FLAKE_B" --no-root-passwd
+
+# All good; unmount both slots
+sudo umount -R /mntB
+sudo umount -R /mntA
 
 sync
 
-echo "\nCompleted installation.  There are now two independent boot and root slots on $DISK."
-echo "Slot A (ESP A + ROOT A) uses hostname ${HOSTNAME_A}, and slot B (ESP B + ROOT B) uses hostname ${HOSTNAME_B}."
-echo "Each boot loader only knows about its own root.  Configure the UEFI boot order with efibootmgr so that the slot A"
-echo "entry is tried first; if it fails, firmware should fall back to slot B.  Use systemd‑boot’s menu to select previous"
-echo "generations within a slot when needed.\n"
+log "\nCompleted installation.  There are now two independent boot and root slots on $DISK."
+log "Slot A (ESP A + ROOT A) uses hostname ${HOSTNAME_A}, and slot B (ESP B + ROOT B) uses hostname ${HOSTNAME_B}."
+log "Each boot loader only knows about its own root.  Configure the UEFI boot order with efibootmgr so that the slot A"
+log "entry is tried first; if it fails, firmware should fall back to slot B.  Use systemd‑boot’s menu to select previous"
+log "generations within a slot when needed.\n"
 
-echo "You can optionally register both ESPs with UEFI using efibootmgr.  For example:\n"
-echo "  sudo efibootmgr -c -d $DISK -p 1 -L \"NixOS (${HOSTNAME_A})\" -l '\\\\EFI\\\\systemd\\\\systemd-bootaa64.efi'\n"
-echo "  sudo efibootmgr -c -d $DISK -p 2 -L \"NixOS (${HOSTNAME_B})\" -l '\\\\EFI\\\\systemd\\\\systemd-bootaa64.efi'\n"
-echo "and then adjust the BootOrder so that the A entry is first."
+log "You can optionally register both ESPs with UEFI using efibootmgr.  For example:\n"
+log "  sudo efibootmgr -c -d $DISK -p 1 -L \"NixOS (${HOSTNAME_A})\" -l '\\\\EFI\\\\systemd\\\\systemd-bootaa64.efi'\n"
+log "  sudo efibootmgr -c -d $DISK -p 2 -L \"NixOS (${HOSTNAME_B})\" -l '\\\\EFI\\\\systemd\\\\systemd-bootaa64.efi'\n"
+log "and then adjust the BootOrder so that the A entry is first."
