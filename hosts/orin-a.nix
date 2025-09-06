@@ -1,17 +1,16 @@
 { pkgs, lib, ... }: {
   environment.systemPackages = [
     (pkgs.writeShellScriptBin "status" ''
-      echo "Known good generation"
+      echo "Known bad generation"
     '')
   ];
 
   # # Exit the initrd scripts early -> kernel panics "Attempted to kill init!"
-  # boot.initrd.postMountCommands = lib.mkAfter ''
-    # set -e
-    # trap '${pkgs.busybox}/bin/reboot -f' ERR
-    # # Anything failing after this point triggers the trap → hard reboot
-    # false   # <- your failing step (simulated)
-  # '';
+  boot.initrd.postMountCommands = lib.mkAfter ''
+    set -e
+    trap '${pkgs.busybox}/bin/reboot -f' ERR
+    false
+  '';
   # (Optional) reboot quickly after panic
   boot.kernelParams = lib.mkAfter [
     "panic=5"
