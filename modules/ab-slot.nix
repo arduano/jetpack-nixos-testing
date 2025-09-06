@@ -52,5 +52,19 @@ in {
     boot.loader.systemd-boot.enable = true;
     boot.loader.efi.canTouchEfiVariables = true;
     boot.loader.efi.efiSysMountPoint = "/boot";
+
+    # Ensure “boot success” is only blessed if no failed units
+    systemd.services."systemd-boot-check-no-failures".wantedBy = [ "boot-complete.target" ];
+    systemd.services."systemd-boot-check-no-failures".enable = true;
+
+    # After entries are generated, mark the newest one as a trial (+2 tries).
+    boot.loader.systemd-boot.extraInstallCommands = ''
+      set -eu
+      E=/boot/loader/entries
+      latest="$(ls -1v "$E"/nixos-generation-*.conf | tail -n1)"
+      base="''${latest%.conf}.conf"
+      trial="''${base%.conf}+2-0.conf"
+      [ -e "$trial" ] || mv "$base" "$trial"
+    '';
   };
 }
