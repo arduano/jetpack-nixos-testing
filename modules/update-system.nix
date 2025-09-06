@@ -17,9 +17,7 @@ in {
         --flake ${cfg.flakeRef}#${cfg.otherHostname} \
         --no-root-passwd
     '')
-  ];
 
-  environment.systemPackages = [
     (pkgs.writeShellScriptBin "update-system" ''
       set -euo pipefail
 
