@@ -7,6 +7,8 @@
   # Enable the vendor graphics stack (required for CUDA and multimedia):contentReference[oaicite:2]{index=2}.
   hardware.graphics.enable = true;
 
+  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+
   users.users.nixos = {
     isNormalUser = true;
     extraGroups = [ "wheel" ];

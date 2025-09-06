@@ -5,40 +5,45 @@
     jetpack.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = inputs@{ self, nixpkgs, jetpack, ... }: {
-    # Build the “orin” system using JetPack modules
-    nixosConfigurations.orin = nixpkgs.lib.nixosSystem {
-      # You can embed extra configuration directly here, or keep it in
-      # configuration.nix as shown below.
-      modules = [
-        ./configuration.nix
-        jetpack.nixosModules.default
-        ({ pkgs, ... }: {
-          # Tell NixOS where the root and boot partitions live.
-          # The labels “NIXROOT_A” and “NIXBOOT_A” are set by the
-          # installation script; you can also use /dev/nvme0n1p3 and p1.
-          fileSystems."/" = {
-            device  = "/dev/disk/by-label/NIXROOT_A";
-            fsType  = "btrfs";
-            options = [ "subvol=@"
-                        "compress=zstd"
-                        "ssd"
-                        "discard=async"
-                      ];
-          };
-          fileSystems."/boot" = {
-            device = "/dev/disk/by-label/NIXBOOT_A";
-            fsType = "vfat";
-          };
-
-          # Use systemd‑boot on UEFI.  Grub isn’t needed on Jetson.
-          boot.loader.systemd-boot.enable = true;
-          boot.loader.efi.canTouchEfiVariables = true;
-
-          networking.hostName = "orin";
-          # (Optional) Set a time zone and locale, user accounts, etc.
-        })
-      ];
+  outputs = inputs@{ self, nixpkgs, jetpack, ... }:
+  let
+    # Common JetPack/NixOS module
+    baseModules = [
+      jetpack.nixosModules.default
+      ./configuration.nix
+    ];
+    mkSystem = { hostname, rootLabel, bootLabel }:
+      nixpkgs.lib.nixosSystem {
+        system = "aarch64-linux";
+        modules = baseModules ++ [
+          { pkgs, ... }: {
+            # root and boot specific to the slot
+            fileSystems."/" = {
+              device = "/dev/disk/by-label/${rootLabel}";
+              fsType = "btrfs";
+              options = [ "subvol=@" "ssd" "compress=zstd" "discard=async" ];
+            };
+            fileSystems."/boot" = {
+              device = "/dev/disk/by-label/${bootLabel}";
+              fsType  = "vfat";
+            };
+            boot.loader.systemd-boot.enable = true;
+            boot.loader.efi.canTouchEfiVariables = true;
+            networking.hostName = hostname;
+          }
+        ];
+      };
+  in
+  {
+    nixosConfigurations.orin-a = mkSystem {
+      hostname = "orin-a";
+      rootLabel = "NIXROOT_A";
+      bootLabel = "NIXBOOT_A";
+    };
+    nixosConfigurations.orin-b = mkSystem {
+      hostname = "orin-b";
+      rootLabel = "NIXROOT_B";
+      bootLabel = "NIXBOOT_B";
     };
   };
 }
