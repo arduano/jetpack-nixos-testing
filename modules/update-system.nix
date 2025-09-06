@@ -15,8 +15,7 @@ in {
       sudo nixos-install \
         --root /mnt/other \
         --flake ${cfg.flakeRef}#${cfg.otherHostname} \
-        --no-root-passwd \
-        --refresh
+        --no-root-passwd
 
       # Ensure fallback path exists on the other ESP
       if [ -f /mnt/other/boot/EFI/systemd/systemd-bootaa64.efi ]; then
