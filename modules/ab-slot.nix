@@ -77,5 +77,25 @@ in {
     # Only bless boot as "successful" if no failed units
     systemd.services.systemd-boot-check-no-failures.enable = true;
     systemd.services.systemd-boot-check-no-failures.wantedBy = [ "boot-complete.target" ];
+
+    # Belt-and-suspenders: service that reboots if initrd hits emergency.target
+    boot.initrd.systemd.services.reboot-on-emergency = {
+      description = "Auto-reboot when initrd enters emergency";
+      wantedBy = [ "emergency.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.systemd}/bin/systemctl --no-block reboot";
+      };
+    };
+
+    ## 2) Userspace: reboot if systemd falls into rescue/emergency
+    systemd.services.reboot-on-emergency = {
+      description = "Auto-reboot on userspace emergency/rescue";
+      wantedBy = [ "emergency.target" "rescue.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.systemd}/bin/systemctl --no-block reboot";
+      };
+    };
   };
 }
