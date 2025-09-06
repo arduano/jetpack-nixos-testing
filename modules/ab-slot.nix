@@ -53,18 +53,25 @@ in {
     boot.loader.efi.canTouchEfiVariables = true;
     boot.loader.efi.efiSysMountPoint = "/boot";
 
-    # Ensure “boot success” is only blessed if no failed units
-    systemd.services."systemd-boot-check-no-failures".wantedBy = [ "boot-complete.target" ];
-    systemd.services."systemd-boot-check-no-failures".enable = true;
+    # Turn the newest generation into a trial (2 tries) using absolute tool paths
+    boot.loader.systemd-boot.extraInstallCommands =
+      let cu = "${pkgs.coreutils}/bin";
+      in ''
+        set -eu
+        E=/boot/loader/entries
+        # find newest nixos-generation-*.conf (numeric sort)
+        latest="$(${cu}/printf '%s\n' "$E"/nixos-generation-*.conf \
+                | ${cu}/sort -V | ${cu}/tail -n1 || true)"
+        if [ -n "${latest:-}" ] && [ -e "$latest" ]; then
+          trial="${latest%.conf}+2-0.conf"
+          if [ ! -e "$trial" ]; then
+            ${cu}/mv "$latest" "$trial"
+          fi
+        fi
+      '';
 
-    # After entries are generated, mark the newest one as a trial (+2 tries).
-    boot.loader.systemd-boot.extraInstallCommands = ''
-      set -eu
-      E=/boot/loader/entries
-      latest="$(ls -1v "$E"/nixos-generation-*.conf | tail -n1)"
-      base="''${latest%.conf}.conf"
-      trial="''${base%.conf}+2-0.conf"
-      [ -e "$trial" ] || mv "$base" "$trial"
-    '';
+    # Only bless boot as "successful" if no failed units
+    systemd.services.systemd-boot-check-no-failures.enable = true;
+    systemd.services.systemd-boot-check-no-failures.wantedBy = [ "boot-complete.target" ];
   };
 }
